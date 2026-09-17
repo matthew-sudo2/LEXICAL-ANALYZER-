@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .core.tokens import TokenType
 
@@ -8,6 +8,8 @@ class AnalysisRequest(BaseModel):
 
 
 class LexemeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     lexeme: str
     token_type: TokenType
     line: int
@@ -15,6 +17,8 @@ class LexemeResponse(BaseModel):
 
 
 class AnalysisErrorResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     message: str
     value: str
     line: int
