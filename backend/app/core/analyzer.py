@@ -60,7 +60,6 @@ class Analyzer:
                 end = source.find("\n", index)
                 end = len(source) if end == -1 else end
                 value = source[index:end]
-                lexemes.append(Lexeme(value, TokenType.COMMENT, line, column))
                 column += len(value)
                 index = end
                 continue
@@ -85,7 +84,7 @@ class Analyzer:
                     end += 1
                 value = source[index:end]
                 state = self.automaton.classify(value)
-                token = TokenType.KEYWORD if value in self.keywords else TokenType.BOOLEAN if value in self.boolean_literals else TokenType.IDENTIFIER
+                token = TokenType.KEYWORD if value in self.keywords or value in self.boolean_literals else TokenType.IDENTIFIER
                 if state is State.INVALIDATION_STATE:
                     errors.append(AnalysisError("Invalid identifier", value, start_line, start_column))
                 else:

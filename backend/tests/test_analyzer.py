@@ -26,6 +26,4 @@ def test_handles_strings_comments_and_compound_operators() -> None:
     lexemes, errors = Analyzer().analyze('name != "Ada" # greeting')
 
     assert errors == []
-    assert [lexeme.token_type for lexeme in lexemes] == [
-        TokenType.IDENTIFIER, TokenType.NOT_EQUAL, TokenType.STRING, TokenType.COMMENT,
-    ]
+    assert [lexeme.token_type for lexeme in lexemes] == [TokenType.IDENTIFIER, TokenType.NOT_EQUAL, TokenType.STRING]

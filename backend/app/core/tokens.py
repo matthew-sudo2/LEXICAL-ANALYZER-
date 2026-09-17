@@ -7,8 +7,6 @@ class TokenType(str, Enum):
     INTEGER = "INTEGER"
     FLOAT = "FLOAT"
     KEYWORD = "KEYWORD"
-    BOOLEAN = "BOOLEAN"
-    COMMENT = "COMMENT"
     PLUS = "PLUS"
     MINUS = "MINUS"
     MULTIPLY = "MULTIPLY"
