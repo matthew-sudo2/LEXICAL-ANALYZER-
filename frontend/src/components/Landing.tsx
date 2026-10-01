@@ -29,6 +29,8 @@ export default function Landing() {
         <Logo />
         <div className="nav-links">
           <Link to="/">Product</Link>
+          <Link to="/automata">Automata</Link>
+          <Link to="/tests">Tests</Link>
           <Link to="/docs/token-reference">Token Reference</Link>
           <Link to="/about">Team</Link>
           <Link to="/docs/how-it-works">Docs</Link>

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import Logo from './Logo'
-import { tokenize, type LexerError } from '../lexer'
+import { tokenize, type LexerError, type Token, type StateTransition } from '../dfaLexer'
 
 interface TokenRow {
   token: string
@@ -9,6 +9,8 @@ interface TokenRow {
   type: string
   line: number
   col: number
+  stateTrace?: string[]
+  finalState?: string
 }
 
 const DEFAULT_CODE = `let total = 42;\nprint("hello");`
@@ -25,6 +27,8 @@ export default function Analyzer() {
   const [searchTerm, setSearch]   = useState('')
   const [tokenCount, setCount]    = useState(0)
   const [selectedRow, setRow]     = useState<number | null>(null)
+  const [transitions, setTransitions] = useState<StateTransition[]>([])
+  const [showTransitions, setShowTransitions] = useState(false)
 
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -52,6 +56,7 @@ export default function Analyzer() {
     setTokens([])
     setRow(null)
     setSearch('')
+    setTransitions([])
 
     setTimeout(() => {
       const result = tokenize(code)
@@ -59,13 +64,20 @@ export default function Analyzer() {
         setError(result.error)
         setStatus('error')
         setCount(0)
+        setTransitions([])
       } else {
         const rows = result.tokens.map(t => ({
-          token: t.token, lexeme: t.lexeme,
-          type: t.type, line: t.line, col: t.col,
+          token: t.token, 
+          lexeme: t.lexeme,
+          type: t.type, 
+          line: t.line, 
+          col: t.col,
+          stateTrace: t.stateTrace,
+          finalState: t.finalState
         }))
         setTokens(rows)
         setCount(rows.length)
+        setTransitions(result.transitions)
         setStatus('complete')
       }
     }, 300)
@@ -244,6 +256,7 @@ export default function Analyzer() {
                   <span>Lexeme</span>
                   <span>Type</span>
                   <span>Line</span>
+                  <span>State</span>
                 </div>
                 {filtered.map((t, i) => (
                   <div
@@ -258,9 +271,42 @@ export default function Analyzer() {
                     <span className="token-lexeme-cell">{t.lexeme}</span>
                     <span className="token-type-cell">{t.type}</span>
                     <span className="token-line-cell">{t.line}</span>
+                    <span className="token-state-cell">
+                      {t.finalState || '—'}
+                    </span>
                   </div>
                 ))}
               </div>
+
+              {/* State Transition Details for Selected Token */}
+              {selectedRow !== null && filtered[selectedRow]?.stateTrace && (
+                <div className="state-trace-panel">
+                  <div className="state-trace-header">
+                    <span className="eyebrow">DFA STATE TRACE</span>
+                    <span className="state-trace-token">{filtered[selectedRow].lexeme}</span>
+                  </div>
+                  <div className="state-trace-path">
+                    {filtered[selectedRow].stateTrace!.map((state, i, arr) => (
+                      <span key={i} className="state-trace-item">
+                        <span className={`state-badge ${arr[arr.length - 1] === state && state.includes('ACC') ? 'state-accept' : state.includes('REJ') ? 'state-reject' : ''}`}>
+                          {state}
+                        </span>
+                        {i < arr.length - 1 && <span className="state-arrow">→</span>}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="state-trace-result">
+                    <span className={`result-badge ${filtered[selectedRow].finalState?.includes('ACC') || filtered[selectedRow].finalState?.includes('ACCEPT') ? 'result-accept' : filtered[selectedRow].finalState?.includes('REJ') || filtered[selectedRow].finalState?.includes('ERROR') ? 'result-reject' : 'result-neutral'}`}>
+                      {filtered[selectedRow].finalState?.includes('ACC') || filtered[selectedRow].finalState?.includes('ACCEPT') ? '✓ ACCEPTED' : 
+                       filtered[selectedRow].finalState?.includes('REJ') || filtered[selectedRow].finalState?.includes('ERROR') ? '✗ REJECTED' : 
+                       'COMPLETED'}
+                    </span>
+                    <span className="result-text">
+                      Final state: <code>{filtered[selectedRow].finalState}</code>
+                    </span>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
