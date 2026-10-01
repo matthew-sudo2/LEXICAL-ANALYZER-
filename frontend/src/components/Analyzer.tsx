@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { tokenize, Token, LexerError } from '../lexer'
 
 interface TokenRow {
@@ -20,21 +20,33 @@ export default function Analyzer() {
   const [searchTerm, setSearchTerm] = useState('')
   const [tokenCount, setTokenCount] = useState(0)
 
-  const scanningRef = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const content = e.target?.result as string
+        setCode(content)
+        setStatus('idle')
+        setError(null)
+        setTokens([])
+      }
+      reader.readAsText(file)
+    }
+    // Reset the input so the same file can be selected again
+    event.target.value = ''
+  }
 
   const handleRunAnalysis = () => {
-    if (status === 'scanning') return
-
-    scanningRef.current = true
     setStatus('scanning')
     setError(null)
     setTokens([])
 
-    // Simulate scanning delay
+    // Use setTimeout to show scanning animation
     setTimeout(() => {
       const result = tokenize(code)
-
-      scanningRef.current = false
 
       if ('error' in result) {
         setError(result.error)
@@ -51,7 +63,7 @@ export default function Analyzer() {
         setTokenCount(result.tokens.length)
         setStatus('complete')
       }
-    }, 800)
+    }, 300)
   }
 
   const filteredTokens = tokens.filter(t => {
@@ -83,6 +95,16 @@ export default function Analyzer() {
     <div className="app-container">
       <header className="app-header-row">
         <div className="app-file">● untitled.lex</div>
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".lex,.txt"
+          onChange={handleFileUpload}
+          style={{ display: 'none' }}
+        />
+        <button className="o-button" onClick={() => fileInputRef.current?.click()}>
+          📂 Upload File
+        </button>
         <button className="o-button" onClick={handleRunAnalysis} disabled={status === 'scanning'}>
           {status === 'scanning' ? 'Scanning…' : '▶ Run Analysis'}
         </button>
