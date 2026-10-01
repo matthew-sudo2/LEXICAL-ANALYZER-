@@ -4,9 +4,107 @@
  * Converted from NFA using Subset Construction Method
  * 
  * Formal Definition: M' = (Q', Σ, δ', q0', F')
+ * 
+ * NOTE: The actual LexiScan analyzer uses a HYBRID approach:
+ * - DFA for structured tokens (identifiers, numbers, strings)
+ * - Pattern matching for operators and delimiters
+ * - This DFA shown here is the identifier-focused subset for educational purposes
  */
 
 import { IDENTIFIER_NFA } from './nfa'
+
+// ============================================================================
+// HYBRID APPROACH EXPLANATION
+// ============================================================================
+
+export const HYBRID_APPROACH_DESCRIPTION = {
+  title: "LexiScan's Hybrid Tokenization Approach",
+  description: "The actual analyzer combines multiple techniques for optimal performance",
+  
+  techniques: [
+    {
+      name: "DFA-based Recognition",
+      tokens: ["Identifiers", "Numbers (Integer/Float)", "Strings"],
+      description: "Structured tokens are recognized using deterministic finite automata for efficiency and correctness",
+      states: ["Q1 (identifier)", "Q4-Q6 (numbers)", "Q3 (strings)"]
+    },
+    {
+      name: "Pattern Matching",
+      tokens: ["Operators", "Delimiters"],
+      description: "Fixed-character tokens are matched using direct string comparison and lookup tables",
+      examples: ["+, -, *, /, %, =, !, <, >", "(, ), {, }, [, ], ,, ;, :"]
+    },
+    {
+      name: "Maximal Munch",
+      tokens: ["All"],
+      description: "Always consume the longest possible token (e.g., '==' not '=' then '=')",
+      examples: [">= is one token, not > and =", "2.5 is one float, not 2 and .5"]
+    }
+  ],
+  
+  advantages: [
+    "Efficiency: DFA for variable-length tokens, direct lookup for fixed tokens",
+    "Correctness: Maximal munch ensures unambiguous tokenization",
+    "Maintainability: Clear separation of concerns between token types",
+    "Flexibility: Easy to add new operators/delimiters without changing DFA"
+  ],
+  
+  formalDefinition: `
+Full Multi-Token DFA Formal Definition (Sub-DFA for Structured Tokens)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+M' = (Q', Σ, δ', q0', F')
+
+Where:
+
+1. Q' = {INITIAL, Q1, Q3, Q4, Q5, Q6, REJECT}
+   Set of states for structured token recognition (identifiers, numbers, strings)
+
+2. Σ = {letter, digit, underscore, dot, quote}
+   Input alphabet for structured tokens
+
+3. δ': Q' × Σ → Q'
+   Deterministic transition function for structured tokens:
+   
+   δ'(INITIAL, letter) = Q1
+   δ'(INITIAL, digit) = Q4
+   δ'(INITIAL, underscore) = Q1
+   δ'(INITIAL, dot) = REJECT
+   δ'(INITIAL, quote) = Q3
+   
+   δ'(Q1, letter) = Q1      → TOKEN_IDENTIFIER
+   δ'(Q1, digit) = Q1       → TOKEN_IDENTIFIER
+   δ'(Q1, underscore) = Q1 → TOKEN_IDENTIFIER
+   
+   δ'(Q3, letter) = Q3      → TOKEN_STRING
+   δ'(Q3, digit) = Q3       → TOKEN_STRING
+   δ'(Q3, quote) = ACCEPT  → TOKEN_STRING
+   
+   δ'(Q4, digit) = Q4       → TOKEN_INT
+   δ'(Q4, dot) = Q5
+   
+   δ'(Q5, digit) = Q6       → TOKEN_FLOAT
+   
+   δ'(Q6, digit) = Q6       → TOKEN_FLOAT
+   
+   δ'(REJECT, *) = REJECT
+
+4. q0' = INITIAL
+   Initial/start state
+
+5. F' = {Q1, Q3, Q4, Q6} ⊆ Q'
+   Accepting states for structured tokens (each emits a different token type)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUB-DFA STUDY CASE:
+The identifier-focused DFA shown in the detailed study section is a subset (5 states)
+for theoretical analysis of a single pattern: (letter|_)(letter|digit|_)*
+
+This sub-DFA demonstrates subset construction and minimization techniques
+without the complexity of the full multi-token system.
+`
+}
 
 // ============================================================================
 // SUBSET CONSTRUCTION METHOD - STEP BY STEP
@@ -252,6 +350,107 @@ export const DFA_TRANSITION_TABLE = {
 }
 
 // ============================================================================
+// MULTI-TOKEN DFA TRANSITION TABLE (Documenting Full Token Set)
+// ============================================================================
+
+export const MULTI_TOKEN_DFA_TRANSITION_TABLE = {
+  title: "Multi-Token DFA Transition Table (Structured Tokens)",
+  description: "DFA for identifier, number, and string recognition within the hybrid tokenizer",
+  note: "Operators and delimiters use pattern matching (not shown in this table)",
+  
+  headers: ['State', 'letter [a-zA-Z]', 'digit [0-9]', 'underscore [_]', 'dot [.]', 'quote', 'Token Output'],
+  
+  rows: [
+    {
+      state: 'INITIAL',
+      letter: 'Q1',
+      digit: 'Q4',
+      underscore: 'Q1',
+      dot: 'REJECT',
+      quote: 'Q3',
+      accepting: '✗',
+      description: 'Start state - branches to token paths',
+      tokenOutput: '—'
+    },
+    {
+      state: 'Q1 (ident)',
+      letter: 'Q1',
+      digit: 'Q1',
+      underscore: 'Q1',
+      dot: 'REJECT',
+      quote: 'REJECT',
+      accepting: '✓',
+      description: 'Identifier continuation',
+      tokenOutput: 'TOKEN_IDENTIFIER'
+    },
+    {
+      state: 'Q3 (string)',
+      letter: 'Q3',
+      digit: 'Q3',
+      underscore: 'Q3',
+      dot: 'Q3',
+      quote: 'ACCEPT',
+      accepting: '✓',
+      description: 'String content - loops until closing quote',
+      tokenOutput: 'TOKEN_STRING'
+    },
+    {
+      state: 'Q4 (int)',
+      letter: 'REJECT',
+      digit: 'Q4',
+      underscore: 'REJECT',
+      dot: 'Q5',
+      quote: 'REJECT',
+      accepting: '✓',
+      description: 'Integer digits',
+      tokenOutput: 'TOKEN_INT'
+    },
+    {
+      state: 'Q5 (float)',
+      letter: 'REJECT',
+      digit: 'Q6',
+      underscore: 'REJECT',
+      dot: 'REJECT',
+      quote: 'REJECT',
+      accepting: '✗',
+      description: 'After decimal point',
+      tokenOutput: 'REJECT'
+    },
+    {
+      state: 'Q6 (float)',
+      letter: 'REJECT',
+      digit: 'Q6',
+      underscore: 'REJECT',
+      dot: 'REJECT',
+      quote: 'REJECT',
+      accepting: '✓',
+      description: 'Float digits after decimal',
+      tokenOutput: 'TOKEN_FLOAT'
+    },
+    {
+      state: 'REJECT',
+      letter: 'REJECT',
+      digit: 'REJECT',
+      underscore: 'REJECT',
+      dot: 'REJECT',
+      quote: 'REJECT',
+      accepting: '✗',
+      description: 'Error/trap state',
+      tokenOutput: '—'
+    }
+  ],
+  
+  tokenTypeMapping: {
+    TOKEN_IDENTIFIER: "Letters/digits/underscores (non-keyword)",
+    TOKEN_STRING: "Quoted character sequences",
+    TOKEN_INT: "Whole numbers without decimal point",
+    TOKEN_FLOAT: "Numbers with decimal point",
+    OPERATOR: "+, -, *, /, %, =, !, <, > (pattern matched)",
+    DELIMITER: "(, ), {, }, [, ], ,, ;, : (pattern matched)"
+  }
+}
+
+// ============================================================================
 // COMPARISON: NFA vs DFA
 // ============================================================================
 
@@ -349,8 +548,11 @@ export const SUBSET_CONSTRUCTION_MAPPING = {
 // ============================================================================
 
 export const DFA_FORMAL_NOTATION = `
-FORMAL DFA DEFINITION FOR IDENTIFIER RECOGNITION
+SUB-DFA STUDY CASE: IDENTIFIER RECOGNITION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is a sub-DFA focusing on a single pattern for theoretical analysis.
+The full tokenizer uses the multi-token DFA shown at the top of this page.
 
 M' = (Q', Σ, δ', q0', F')
 

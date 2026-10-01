@@ -1,10 +1,16 @@
 /**
- * NFA (NON-DETERMINISTIC FINITE AUTOMATON) FOR IDENTIFIER RECOGNITION
+ * MULTI-TOKEN NFA (NON-DETERMINISTIC FINITE AUTOMATON)
  * 
  * Formal Definition: M = (Q, Σ, δ, q0, F)
  * 
- * This NFA recognizes valid identifiers that match the pattern:
- * (letter|_)(letter|digit|_)*
+ * This NFA recognizes multiple token types through union construction:
+ * - Identifiers: (letter|_)(letter|digit|_)*
+ * - Numbers: digit+(.digit+)?
+ * - Strings: "([^"\n])*"
+ * - Operators: {+, -, *, /, %, =, !, <, >} with compound forms
+ * - Delimiters: {(, ), {, }, [, ], ,, ;, :, .}
+ * 
+ * The NFA uses ε-transitions to branch into different token recognition paths.
  */
 
 // ============================================================================
@@ -26,7 +32,165 @@ export type TransitionFunction = {
 }
 
 /**
- * NFA for Identifier Recognition
+ * Multi-Token NFA for Lexical Analysis
+ * 
+ * Architecture:
+ * - q0: Initial state with ε-transitions to all token branches
+ * - Identifier branch: q1 → q2 → q3 (loop)
+ * - Number branch: q4 → q5 → q6 (integer) → q7 → q8 (float)
+ * - String branch: q9 → q10 → q11 → q12 (end quote)
+ * - Operator branch: q13 → q14 (check for compound)
+ * - Delimiter branch: q15 → q16 (single char)
+ * - q17: Error/trap state
+ * 
+ * ε-transitions allow the NFA to "guess" which token type to recognize.
+ */
+export const MULTI_TOKEN_NFA: NFADefinition = {
+  // Q: Set of all states
+  Q: [
+    'q0',   // Initial state
+    // Identifier path
+    'q1', 'q2', 'q3',
+    // Number path
+    'q4', 'q5', 'q6', 'q7', 'q8',
+    // String path
+    'q9', 'q10', 'q11', 'q12',
+    // Operator path
+    'q13', 'q14',
+    // Delimiter path
+    'q15', 'q16',
+    // Error state
+    'q17'
+  ],
+
+  // Σ: Alphabet (character categories)
+  Σ: [
+    'letter',      // [a-zA-Z]
+    'digit',       // [0-9]
+    'underscore',  // _
+    'dot',         // .
+    'quote',       // " or '
+    'operator',    // +, -, *, /, %, =, !, <, >
+    'delimiter',   // (, ), {, }, [, ], ,, ;, :
+    'ε'            // Epsilon (empty transition)
+  ],
+
+  // q0: Start state
+  q0: 'q0',
+
+  // F: Accepting states (each path has its accepting states)
+  F: [
+    // Identifier accepting states
+    'q1', 'q2', 'q3',
+    // Number accepting states
+    'q6',  // Integer
+    'q8',  // Float
+    // String accepting state
+    'q12',
+    // Operator accepting states
+    'q13', 'q14',
+    // Delimiter accepting state
+    'q16'
+  ],
+
+  // δ: Transition function with ε-transitions
+  δ: {
+    // q0: Initial state - ε-transitions to all token branches
+    'q0': {
+      'ε': ['q1', 'q4', 'q9', 'q13', 'q15']  // Branch to all token types
+    },
+    
+    // ===== IDENTIFIER PATH =====
+    'q1': {
+      'letter': ['q2'],       // First letter
+      'underscore': ['q2']    // First underscore
+    },
+    'q2': {
+      'letter': ['q3'],       // Continue with letter
+      'digit': ['q3'],        // Continue with digit
+      'underscore': ['q3']    // Continue with underscore
+    },
+    'q3': {
+      'letter': ['q3'],       // Loop: continue with letter
+      'digit': ['q3'],        // Loop: continue with digit
+      'underscore': ['q3']    // Loop: continue with underscore
+    },
+    
+    // ===== NUMBER PATH =====
+    'q4': {
+      'digit': ['q5']         // First digit
+    },
+    'q5': {
+      'digit': ['q6'],        // More digits → integer accepting
+      'dot': ['q7']           // Decimal point → check for float
+    },
+    'q6': {
+      'digit': ['q6'],        // Loop: continue integer
+      'dot': ['q7']           // Decimal point → float path
+    },
+    'q7': {
+      'digit': ['q8']         // First digit after decimal
+    },
+    'q8': {
+      'digit': ['q8']         // Loop: continue float
+    },
+    
+    // ===== STRING PATH =====
+    'q9': {
+      'quote': ['q10']        // Opening quote
+    },
+    'q10': {
+      'letter': ['q11'],      // String content: letter
+      'digit': ['q11'],       // String content: digit
+      'underscore': ['q11'],  // String content: underscore
+      'operator': ['q11'],    // String content: operator
+      'delimiter': ['q11'],   // String content: delimiter
+      'dot': ['q11'],         // String content: dot
+      'quote': ['q12']        // Closing quote → accepting
+    },
+    'q11': {
+      'letter': ['q11'],      // Loop: continue string
+      'digit': ['q11'],
+      'underscore': ['q11'],
+      'operator': ['q11'],
+      'delimiter': ['q11'],
+      'dot': ['q11'],
+      'quote': ['q12']        // Closing quote → accepting
+    },
+    
+    // ===== OPERATOR PATH =====
+    'q13': {
+      'operator': ['q14']     // Single operator → accepting
+    },
+    'q14': {
+      'operator': ['q14']      // Second operator char → compound (accepting)
+    },
+    
+    // ===== DELIMITER PATH =====
+    'q15': {
+      'delimiter': ['q16']    // Single delimiter → accepting
+    },
+    'q16': {
+      // No transitions out (accepting state)
+    },
+    
+    // ===== ERROR STATE =====
+    'q17': {
+      'letter': ['q17'],
+      'digit': ['q17'],
+      'underscore': ['q17'],
+      'dot': ['q17'],
+      'quote': ['q17'],
+      'operator': ['q17'],
+      'delimiter': ['q17']
+    }
+  }
+}
+
+/**
+ * NFA for Identifier Recognition (Single-Pattern Subset)
+ * 
+ * This is the identifier-focused NFA for detailed study.
  * 
  * States:
  * - q0: Initial state (start)
@@ -131,6 +295,241 @@ export const NFA_TRANSITION_TABLE = {
       digit: '∅',
       underscore: '∅',
       accepting: false
+    }
+  ]
+}
+
+export const MULTI_TOKEN_NFA_TRANSITION_TABLE = {
+  title: "Multi-Token NFA Transition Table",
+  description: "δ(state, symbol) → next states (with ε-transitions)",
+  
+  headers: ['State', 'ε', 'letter', 'digit', 'underscore', 'dot', 'quote', 'operator', 'delimiter'],
+  
+  rows: [
+    {
+      state: 'q0 (start)',
+      epsilon: 'q1,q4,q9,q13,q15',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: false,
+      note: 'ε-branch to all token paths'
+    },
+    {
+      state: 'q1 (ident start)',
+      epsilon: '-',
+      letter: 'q2',
+      digit: '-',
+      underscore: 'q2',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: false
+    },
+    {
+      state: 'q2 (ident continue)',
+      epsilon: '-',
+      letter: 'q3',
+      digit: 'q3',
+      underscore: 'q3',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: false
+    },
+    {
+      state: 'q3 (ident loop)',
+      epsilon: '-',
+      letter: 'q3',
+      digit: 'q3',
+      underscore: 'q3',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: true,
+      note: 'IDENTIFIER accepting'
+    },
+    {
+      state: 'q4 (num start)',
+      epsilon: '-',
+      letter: '-',
+      digit: 'q5',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: false
+    },
+    {
+      state: 'q5 (num cont)',
+      epsilon: '-',
+      letter: '-',
+      digit: 'q6',
+      underscore: '-',
+      dot: 'q7',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: false
+    },
+    {
+      state: 'q6 (int accept)',
+      epsilon: '-',
+      letter: '-',
+      digit: 'q6',
+      underscore: '-',
+      dot: 'q7',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: true,
+      note: 'INTEGER accepting'
+    },
+    {
+      state: 'q7 (float dot)',
+      epsilon: '-',
+      letter: '-',
+      digit: 'q8',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: false
+    },
+    {
+      state: 'q8 (float accept)',
+      epsilon: '-',
+      letter: '-',
+      digit: 'q8',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: true,
+      note: 'FLOAT accepting'
+    },
+    {
+      state: 'q9 (str start)',
+      epsilon: '-',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: 'q10',
+      operator: '-',
+      delimiter: '-',
+      accepting: false
+    },
+    {
+      state: 'q10 (str content)',
+      epsilon: '-',
+      letter: 'q11',
+      digit: 'q11',
+      underscore: 'q11',
+      dot: 'q11',
+      quote: 'q12',
+      operator: 'q11',
+      delimiter: 'q11',
+      accepting: false
+    },
+    {
+      state: 'q11 (str loop)',
+      epsilon: '-',
+      letter: 'q11',
+      digit: 'q11',
+      underscore: 'q11',
+      dot: 'q11',
+      quote: 'q12',
+      operator: 'q11',
+      delimiter: 'q11',
+      accepting: false
+    },
+    {
+      state: 'q12 (str end)',
+      epsilon: '-',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: true,
+      note: 'STRING accepting'
+    },
+    {
+      state: 'q13 (op start)',
+      epsilon: '-',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: 'q14',
+      delimiter: '-',
+      accepting: true,
+      note: 'Single operator accepting'
+    },
+    {
+      state: 'q14 (op compound)',
+      epsilon: '-',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: 'q14',
+      delimiter: '-',
+      accepting: true,
+      note: 'Compound operator accepting'
+    },
+    {
+      state: 'q15 (delim start)',
+      epsilon: '-',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: 'q16',
+      accepting: false
+    },
+    {
+      state: 'q16 (delim accept)',
+      epsilon: '-',
+      letter: '-',
+      digit: '-',
+      underscore: '-',
+      dot: '-',
+      quote: '-',
+      operator: '-',
+      delimiter: '-',
+      accepting: true,
+      note: 'DELIMITER accepting'
+    },
+    {
+      state: 'q17 (error)',
+      epsilon: '-',
+      letter: 'q17',
+      digit: 'q17',
+      underscore: 'q17',
+      dot: 'q17',
+      quote: 'q17',
+      operator: 'q17',
+      delimiter: 'q17',
+      accepting: false,
+      note: 'Trap state'
     }
   ]
 }

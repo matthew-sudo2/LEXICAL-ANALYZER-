@@ -225,6 +225,22 @@ export function runTest(testCase: TestCase): TestResult {
   const startTime = performance.now()
   
   try {
+    if (testCase.category === 'Identifier') {
+      const valResult = validateToken(testCase.input, 'IDENTIFIER')
+      const executionTime = performance.now() - startTime
+      const actualResult: 'accept' | 'reject' = valResult.valid ? 'accept' : 'reject'
+      const passed = actualResult === testCase.expected
+      
+      return {
+        testCase,
+        passed,
+        actualResult,
+        error: !valResult.valid ? valResult.reason : undefined,
+        stateTrace: valResult.stateTrace,
+        executionTime
+      }
+    }
+
     const result = tokenize(testCase.input)
     const executionTime = performance.now() - startTime
     

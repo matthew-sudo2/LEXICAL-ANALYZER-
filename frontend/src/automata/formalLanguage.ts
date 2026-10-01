@@ -1,32 +1,75 @@
 /**
  * FORMAL LANGUAGE SPECIFICATION FOR LEXISCAN LEXICAL ANALYZER
  * 
- * This document defines the formal languages recognized by our multi-pattern lexical analyzer.
- * We focus on the IDENTIFIER pattern for detailed NFA/DFA construction.
+ * This document defines the formal languages recognized by our multi-token lexical analyzer.
+ * The analyzer recognizes: Identifiers, Numbers, Strings, Operators, Delimiters, and Keywords.
  */
 
 // ============================================================================
-// 1. IDENTIFIER LANGUAGE (Primary Focus for NFA/DFA)
+// ALPHABET (Σ) - Universal Symbol Set
+// ============================================================================
+
+export const UNIVERSAL_ALPHABET = {
+  name: "Universal Alphabet",
+  description: "Set of all valid symbols in the language",
+  categories: {
+    letters: {
+      description: "Alphabetic characters",
+      symbols: ["a-z", "A-Z"],
+      formal: "L = {a,b,c,...,z,A,B,C,...,Z}"
+    },
+    digits: {
+      description: "Numeric characters",
+      symbols: ["0-9"],
+      formal: "D = {0,1,2,...,9}"
+    },
+    underscore: {
+      description: "Underscore character",
+      symbols: ["_"],
+      formal: "_"
+    },
+    operators: {
+      description: "Arithmetic and comparison operators",
+      symbols: ["+", "-", "*", "/", "%", "=", "!", "<", ">"],
+      formal: "O = {+, -, *, /, %, =, !, <, >}"
+    },
+    delimiters: {
+      description: "Punctuation and grouping symbols",
+      symbols: ["(", ")", "{", "}", "[", "]", ",", ";", ":", "."],
+      formal: "P = {(, ), {, }, [, ], ,, ;, :, .}"
+    },
+    quotes: {
+      description: "String delimiters",
+      symbols: ['"', "'"],
+      formal: "Q = {\" , '}"
+    },
+    whitespace: {
+      description: "Space, tab, newline (skipped)",
+      symbols: [" ", "\t", "\n"],
+      formal: "W = {space, tab, newline}"
+    }
+  },
+  formal: "Σ = L ∪ D ∪ {_} ∪ O ∪ P ∪ Q ∪ W"
+}
+
+// ============================================================================
+// 1. IDENTIFIER LANGUAGE
 // ============================================================================
 
 export const IDENTIFIER_SPEC = {
   name: "Identifier Language",
   
-  // Alphabet (Σ)
+  // Alphabet (Σ_ID)
   alphabet: {
-    description: "Set of all valid symbols",
-    symbols: [
-      "a-z", "A-Z", // lowercase and uppercase letters
-      "0-9",        // digits
-      "_"           // underscore
-    ],
-    formal: "Σ = {a,b,c,...,z,A,B,C,...,Z,0,1,2,...,9,_}"
+    description: "Set of valid identifier symbols",
+    symbols: ["a-z", "A-Z", "0-9", "_"],
+    formal: "Σ_ID = {a,b,c,...,z,A,B,C,...,Z,0,1,2,...,9,_}"
   },
 
-  // Language Definition (L)
+  // Language Definition (L_ID)
   language: {
     description: "Valid identifiers must start with a letter or underscore, followed by any combination of letters, digits, or underscores",
-    formal: "L = { w ∈ Σ* | w = (letter|_)(letter|digit|_)* }",
+    formal: "L_ID = { w ∈ Σ_ID* | w = (letter|_)(letter|digit|_)* }",
     constraints: [
       "Must start with: letter [a-zA-Z] OR underscore [_]",
       "Can continue with: letter [a-zA-Z], digit [0-9], OR underscore [_]",
@@ -39,7 +82,7 @@ export const IDENTIFIER_SPEC = {
   regex: {
     pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/,
     description: "Regular expression for identifier validation",
-    formal: "R = (letter|_)(letter|digit|_)*",
+    formal: "R_ID = (letter|_)(letter|digit|_)*",
     breakdown: [
       {
         component: "[a-zA-Z_]",
@@ -84,6 +127,168 @@ export const IDENTIFIER_SPEC = {
 }
 
 // ============================================================================
+// 2. NUMBER LANGUAGE
+// ============================================================================
+
+export const NUMBER_SPEC = {
+  name: "Number Language",
+  
+  alphabet: {
+    description: "Digits and decimal point",
+    symbols: ["0-9", "."],
+    formal: "Σ_NUM = {0,1,2,...,9,.}"
+  },
+  
+  language: {
+    description: "Integer and floating-point numbers",
+    formal: "L_NUM = L_INT ∪ L_FLOAT",
+    breakdown: {
+      integer: "L_INT = digit(digit)*",
+      float: "L_FLOAT = digit(digit)* . digit(digit)+"
+    }
+  },
+  
+  regex: {
+    integer: /^\d+$/,
+    float: /^\d+\.\d+$/,
+    description: "Integer: one or more digits. Float: digits, decimal point, more digits."
+  },
+  
+  acceptedExamples: [
+    { input: "42", type: "INTEGER", reason: "Simple integer" },
+    { input: "0", type: "INTEGER", reason: "Zero" },
+    { input: "3.14", type: "FLOAT", reason: "Pi approximation" },
+    { input: "2.5", type: "FLOAT", reason: "Decimal number" },
+    { input: "100.0", type: "FLOAT", reason: "Float with zero decimal" }
+  ],
+  
+  rejectedExamples: [
+    { input: ".5", reason: "Must start with digit" },
+    { input: "5.", reason: "Must have digit after decimal" },
+    { input: "5.5.5", reason: "Multiple decimal points" },
+    { input: "abc", reason: "Contains letters" }
+  ]
+}
+
+// ============================================================================
+// 3. STRING LANGUAGE
+// ============================================================================
+
+export const STRING_SPEC = {
+  name: "String Language",
+  
+  alphabet: {
+    description: "Quote delimiters and any character except newline",
+    symbols: ['"', "'", "any except \\n"],
+    formal: "Σ_STR = {\"} ∪ {'} ∪ (Σ \\ {\\n})"
+  },
+  
+  language: {
+    description: "Character sequences enclosed in matching quotes",
+    formal: "L_STR = \"(Σ \\ {\\n})*\" OR '(Σ \\ {\\n})*'",
+    constraints: [
+      "Must start and end with matching quote",
+      "Cannot contain newline (use escaped \\n if needed)",
+      "Can contain any other character including spaces"
+    ]
+  },
+  
+  regex: {
+    pattern: /^"[^"\n]*"$|^'[^'\n]*'$/,
+    description: "String in double or single quotes without newlines"
+  },
+  
+  acceptedExamples: [
+    { input: '"hello"', reason: "Simple string" },
+    { input: "'world'", reason: "Single-quoted string" },
+    { input: '"Hello, World!"', reason: "String with punctuation" },
+    { input: '"user_name"', reason: "String with underscore" },
+    { input: '"42"', reason: "String containing digits" }
+  ],
+  
+  rejectedExamples: [
+    { input: '"hello', reason: "Unclosed string" },
+    { input: 'hello"', reason: "No opening quote" },
+    { input: '"hello\nworld"', reason: "Contains newline" },
+    { input: '"hel"lo"', reason: "Mismatched quotes" }
+  ]
+}
+
+// ============================================================================
+// 4. OPERATOR LANGUAGE
+// ============================================================================
+
+export const OPERATOR_SPEC = {
+  name: "Operator Language",
+  
+  alphabet: {
+    description: "Arithmetic and comparison symbols",
+    symbols: ["+", "-", "*", "/", "%", "=", "!", "<", ">"],
+    formal: "Σ_OP = {+, -, *, /, %, =, !, <, >}"
+  },
+  
+  language: {
+    description: "Single and compound operators",
+    formal: "L_OP = L_SINGLE ∪ L_COMPOUND",
+    breakdown: {
+      single: "{+, -, *, /, %, =, <, >}",
+      compound: "{==, !=, <=, >=}"
+    }
+  },
+  
+  operators: {
+    arithmetic: [
+      { symbol: "+", name: "PLUS", description: "Addition" },
+      { symbol: "-", name: "MINUS", description: "Subtraction" },
+      { symbol: "*", name: "MULTIPLY", description: "Multiplication" },
+      { symbol: "/", name: "DIVIDE", description: "Division" },
+      { symbol: "%", name: "MODULO", description: "Modulo" }
+    ],
+    comparison: [
+      { symbol: "=", name: "ASSIGN", description: "Assignment" },
+      { symbol: "==", name: "EQUAL", description: "Equality comparison" },
+      { symbol: "!=", name: "NOT_EQUAL", description: "Inequality comparison" },
+      { symbol: "<", name: "LESS_THAN", description: "Less than" },
+      { symbol: ">", name: "GREATER_THAN", description: "Greater than" },
+      { symbol: "<=", name: "LESS_EQUAL", description: "Less than or equal" },
+      { symbol: ">=", name: "GREATER_EQUAL", description: "Greater than or equal" }
+    ]
+  }
+}
+
+// ============================================================================
+// 5. DELIMITER LANGUAGE
+// ============================================================================
+
+export const DELIMITER_SPEC = {
+  name: "Delimiter Language",
+  
+  alphabet: {
+    description: "Punctuation and grouping symbols",
+    symbols: ["(", ")", "{", "}", "[", "]", ",", ";", ":", "."],
+    formal: "Σ_DELIM = {(, ), {, }, [, ], ,, ;, :, .}"
+  },
+  
+  language: {
+    description: "Single-character delimiters for grouping and separation",
+    formal: "L_DELIM = {(, ), {, }, [, ], ,, ;, :, .}"
+  },
+  
+  delimiters: [
+    { symbol: "(", name: "LEFT_PAREN", description: "Opening parenthesis" },
+    { symbol: ")", name: "RIGHT_PAREN", description: "Closing parenthesis" },
+    { symbol: "{", name: "LEFT_BRACE", description: "Opening brace" },
+    { symbol: "}", name: "RIGHT_BRACE", description: "Closing brace" },
+    { symbol: "[", name: "LEFT_BRACKET", description: "Opening bracket" },
+    { symbol: "]", name: "RIGHT_BRACKET", description: "Closing bracket" },
+    { symbol: ",", name: "COMMA", description: "Argument separator" },
+    { symbol: ";", name: "SEMICOLON", description: "Statement terminator" },
+    { symbol: ":", name: "COLON", description: "Type annotation separator" },
+    { symbol: ".", name: "DOT", description: "Member access" }
+  ]
+}
+
+// ============================================================================
 // 2. KEYWORD LANGUAGE
 // ============================================================================
 
@@ -98,11 +303,11 @@ export const KEYWORD_SPEC = {
 
   language: {
     description: "Reserved words with specific meaning in the language",
-    formal: "L = { let, const, var, function, return, if, else, for, while, print, true, false, null }",
+    formal: "L = { for, while, if, else, elif, return, break, continue, def, class, import, from, in, and, or, not, None, True, False }",
     keywords: [
-      "let", "const", "var", "function", "return", 
-      "if", "else", "for", "while", "print", 
-      "true", "false", "null"
+      "for", "while", "if", "else", "elif", "return", "break", "continue",
+      "def", "class", "import", "from", "in", "and", "or", "not", "None",
+      "True", "False"
     ]
   },
 

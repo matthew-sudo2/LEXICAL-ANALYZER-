@@ -335,7 +335,7 @@ export function tokenize(input: string): { tokens: Token[]; transitions: StateTr
     }
 
     // ── Operators ────────────────────────────────────
-    const operators = ['+', '-', '*', '/', '=', '==', '!=', '<', '>', '<=', '>=', '!', '&', '|', '^', '%']
+    const operators = ['+', '-', '*', '/', '=', '==', '!=', '<', '>', '<=', '>=', '&', '|', '^', '%']
     let foundOp = false
     
     for (const op of operators.sort((a, b) => b.length - a.length)) { // Try longest first
