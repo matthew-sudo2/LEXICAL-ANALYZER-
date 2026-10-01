@@ -2,6 +2,8 @@ from enum import Enum
 
 
 class State(str, Enum):
+    """DFA states for lexical analysis."""
+    
     INITIAL = "INITIAL"
     Q1 = "Q1"
     Q2 = "Q2"
