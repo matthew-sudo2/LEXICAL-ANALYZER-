@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react'
-import { tokenize, Token, LexerError } from '../lexer'
+import { useState, useRef, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import Logo from './Logo'
+import { tokenize, type LexerError } from '../lexer'
 
 interface TokenRow {
   token: string
@@ -9,192 +11,262 @@ interface TokenRow {
   col: number
 }
 
-const DEFAULT_CODE = `let total = 42;
-print("hello");`
+const DEFAULT_CODE = `let total = 42;\nprint("hello");`
+
+function lineCount(code: string) {
+  return code.split('\n').length
+}
 
 export default function Analyzer() {
-  const [code, setCode] = useState(DEFAULT_CODE)
-  const [tokens, setTokens] = useState<TokenRow[]>([])
-  const [error, setError] = useState<LexerError | null>(null)
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'complete' | 'error'>('idle')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [tokenCount, setTokenCount] = useState(0)
+  const [code, setCode]           = useState(DEFAULT_CODE)
+  const [tokens, setTokens]       = useState<TokenRow[]>([])
+  const [error, setError]         = useState<LexerError | null>(null)
+  const [status, setStatus]       = useState<'idle'|'scanning'|'complete'|'error'>('idle')
+  const [searchTerm, setSearch]   = useState('')
+  const [tokenCount, setCount]    = useState(0)
+  const [selectedRow, setRow]     = useState<number | null>(null)
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const content = e.target?.result as string
-        setCode(content)
-        setStatus('idle')
-        setError(null)
-        setTokens([])
-      }
-      reader.readAsText(file)
+  /* ── File upload ─────────────────────────────── */
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      setCode(ev.target?.result as string)
+      setStatus('idle')
+      setError(null)
+      setTokens([])
+      setRow(null)
     }
-    // Reset the input so the same file can be selected again
-    event.target.value = ''
+    reader.readAsText(file)
+    e.target.value = ''
   }
 
-  const handleRunAnalysis = () => {
+  /* ── Run Analysis ────────────────────────────── */
+  const handleRun = useCallback(() => {
+    if (status === 'scanning') return
     setStatus('scanning')
     setError(null)
     setTokens([])
+    setRow(null)
+    setSearch('')
 
-    // Use setTimeout to show scanning animation
     setTimeout(() => {
       const result = tokenize(code)
-
       if ('error' in result) {
         setError(result.error)
         setStatus('error')
-        setTokenCount(0)
+        setCount(0)
       } else {
-        setTokens(result.tokens.map(t => ({
-          token: t.token,
-          lexeme: t.lexeme,
-          type: t.type,
-          line: t.line,
-          col: t.col
-        })))
-        setTokenCount(result.tokens.length)
+        const rows = result.tokens.map(t => ({
+          token: t.token, lexeme: t.lexeme,
+          type: t.type, line: t.line, col: t.col,
+        }))
+        setTokens(rows)
+        setCount(rows.length)
         setStatus('complete')
       }
     }, 300)
-  }
+  }, [code, status])
 
-  const filteredTokens = tokens.filter(t => {
-    const term = searchTerm.toLowerCase()
-    return (
-      t.token.toLowerCase().includes(term) ||
-      t.lexeme.toLowerCase().includes(term) ||
-      t.type.toLowerCase().includes(term) ||
-      t.line.toString().includes(term) ||
-      t.col.toString().includes(term)
-    )
+  /* ── Derived ─────────────────────────────────── */
+  const filtered = tokens.filter(t => {
+    const s = searchTerm.toLowerCase()
+    return !s ||
+      t.token.toLowerCase().includes(s) ||
+      t.lexeme.toLowerCase().includes(s) ||
+      t.type.toLowerCase().includes(s) ||
+      String(t.line).includes(s)
   })
 
-  const getStatusText = () => {
-    if (status === 'idle') return 'Waiting for source'
-    if (status === 'scanning') return 'Analyzing source'
-    if (status === 'error') return 'Lexer halted'
-    return 'Analysis complete'
-  }
+  const lines = code.split('\n')
 
-  const getErrorText = () => {
-    if (status === 'idle') return '0 errors · 0 warnings'
-    if (status === 'scanning') return 'Analyzing source'
-    if (status === 'error') return '1 error · 0 warnings'
-    return '0 errors · 0 warnings'
-  }
+  const errorLine  = error?.line ?? null
+  const statusText = status === 'idle'     ? 'Waiting for source'
+                   : status === 'scanning' ? 'Analyzing source'
+                   : status === 'error'    ? 'Lexer halted'
+                   :                         'Analysis complete'
+  const errorText  = status === 'error'    ? '1 error · 0 warnings'
+                   : status === 'idle'     ? '0 errors · 0 warnings'
+                   : status === 'scanning' ? 'Analyzing source'
+                   :                         '0 errors · 0 warnings'
 
   return (
-    <div className="app-container">
-      <header className="app-header-row">
-        <div className="app-file">● untitled.lex</div>
+    <div className="analyzer-root">
+      {/* ── Top bar ──────────────────────────────── */}
+      <header className="analyzer-topbar">
+        <Logo />
+
+        <span className="analyzer-filename">● untitled.lex</span>
+
         <input
+          ref={fileRef}
           type="file"
-          ref={fileInputRef}
-          accept=".lex,.txt"
-          onChange={handleFileUpload}
+          accept=".lex,.txt,.js,.ts"
+          onChange={handleUpload}
           style={{ display: 'none' }}
         />
-        <button className="o-button" onClick={() => fileInputRef.current?.click()}>
-          📂 Upload File
+        <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
+          Upload file
         </button>
-        <button className="o-button" onClick={handleRunAnalysis} disabled={status === 'scanning'}>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={handleRun}
+          disabled={status === 'scanning'}
+        >
           {status === 'scanning' ? 'Scanning…' : '▶ Run Analysis'}
         </button>
-        <button className="settings-btn">⚙</button>
       </header>
 
-      <div className="app-workspace">
-        <div className="editor-panel">
-          <div className="panel-title">
-            <div>
+      {/* ── Workspace ────────────────────────────── */}
+      <div className="analyzer-workspace">
+
+        {/* ── Editor panel ─────────────────────── */}
+        <div className="editor-card">
+          <div className="panel-header">
+            <div className="panel-label">
               <small>EDITOR</small>
-              <b>Source Input</b>
+              <strong>Source Input</strong>
             </div>
-            <span>JavaScript</span>
+            <span className="panel-badge">JavaScript</span>
           </div>
-          <div className="code-editor">
-            <textarea
-              value={code}
-              onChange={(e) => {
-                setCode(e.target.value)
-                if (status !== 'idle') setStatus('idle')
-                if (error) setError(null)
-              }}
-              placeholder="Paste or type source code here…"
-              className={status === 'scanning' ? 'disabled' : ''}
-            />
+
+          <div className="editor-body">
+            {/* Gutter */}
+            <div className="editor-gutter" aria-hidden>
+              {lines.map((_, i) => (
+                <span
+                  key={i}
+                  style={
+                    errorLine === i + 1
+                      ? { color: '#c97b7d', fontWeight: 600 }
+                      : undefined
+                  }
+                >
+                  {i + 1}
+                </span>
+              ))}
+            </div>
+            {/* Textarea */}
+            <div className="editor-textarea-wrap">
+              <textarea
+                className="editor-textarea"
+                value={code}
+                onChange={e => {
+                  setCode(e.target.value)
+                  if (status !== 'idle') setStatus('idle')
+                  if (error) setError(null)
+                }}
+                placeholder="Paste or type source code here…"
+                disabled={status === 'scanning'}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+              />
+            </div>
           </div>
-          <div className="panel-footer">
-            UTF-8 <span>Ln 1, Col 1</span>
+
+          <div className="editor-statusbar">
+            <span>UTF-8</span>
+            <span>
+              {lineCount(code)} {lineCount(code) === 1 ? 'line' : 'lines'}
+            </span>
           </div>
         </div>
 
-        <div className="results-panel">
-          <div className="panel-title">
-            <div>
+        {/* ── Results panel ────────────────────── */}
+        <div className="results-card">
+          <div className="panel-header">
+            <div className="panel-label">
               <small>RESULTS</small>
-              <b>Token Output</b>
+              <strong>Token Output</strong>
             </div>
-            <span>{status === 'idle' ? 'No results' : status === 'scanning' ? 'Scanning' : `${tokenCount} tokens`}</span>
+            <span className="panel-badge">
+              {status === 'idle'     && 'No results'}
+              {status === 'scanning' && 'Scanning'}
+              {status === 'complete' && `${tokenCount} tokens`}
+              {status === 'error'    && '0 tokens'}
+            </span>
           </div>
 
-          {status === 'error' && error ? (
-            <div className="error-banner">
-              <div className="error-message">LexerError: {error.message} — line {error.line}, col {error.col}</div>
-              <p>Fix the error and run analysis again.</p>
+          {/* ── error ──── */}
+          {status === 'error' && error && (
+            <div className="state-error">
+              <div className="error-card">
+                <div className="error-card-msg">
+                  LexerError: {error.message} — line {error.line}, col {error.col}
+                </div>
+              </div>
+              <p className="error-card-hint">Fix the marked character and run analysis again.</p>
             </div>
-          ) : status === 'idle' ? (
-            <div className="empty-state">
-              <i>⌁</i>
-              <b>Run analysis to see tokens.</b>
-              <span>Your parsed lexemes will appear here.</span>
+          )}
+
+          {/* ── idle ───── */}
+          {status === 'idle' && (
+            <div className="state-empty">
+              <span className="state-empty-icon">⌁</span>
+              <span className="state-empty-title">Run analysis to see tokens.</span>
+              <span className="state-empty-sub">Your parsed lexemes will appear here.</span>
             </div>
-          ) : status === 'scanning' ? (
-            <div className="scan-area">
-              <span>scanning…</span>
-              <div className="skeleton" />
-              <div className="skeleton" />
-              <div className="skeleton short" />
-              <div className="skeleton" />
+          )}
+
+          {/* ── scanning ─ */}
+          {status === 'scanning' && (
+            <div className="state-scanning">
+              <span className="scanning-label">scanning…</span>
+              <div className="skel" />
+              <div className="skel" />
+              <div className="skel half" />
+              <div className="skel" />
             </div>
-          ) : (
+          )}
+
+          {/* ── complete ─ */}
+          {status === 'complete' && (
             <>
               <div className="token-toolbar">
-                <label>⌕ <input placeholder="Filter tokens" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></label>
-                <span>{filteredTokens.length} shown</span>
+                <label className="token-search">
+                  <span style={{ color: '#b0bcc0' }}>⌕</span>
+                  <input
+                    placeholder="Filter tokens…"
+                    value={searchTerm}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                </label>
+                <span className="token-count">{filtered.length} shown</span>
               </div>
-              <div className="token-table">
-                <div className="token-head">
+
+              <div className="token-table-wrap">
+                <div className="token-table-head">
                   <span>Token</span>
                   <span>Lexeme</span>
                   <span>Type</span>
                   <span>Line</span>
-                  <span>Col</span>
                 </div>
-                {filteredTokens.map((t, index) => (
-                  <div className="token-row" key={`${t.lexeme}-${index}`}>
-                    <span className={`token-type ${t.type.toLowerCase()}`}>{t.type}</span>
-                    <code>{t.lexeme}</code>
-                    <span>{t.type}</span>
-                    <span>{t.line}</span>
-                    <span>{t.col}</span>
+                {filtered.map((t, i) => (
+                  <div
+                    key={`${t.lexeme}-${i}`}
+                    className={`token-table-row${selectedRow === i ? ' selected-row' : ''}`}
+                    onClick={() => setRow(selectedRow === i ? null : i)}
+                  >
+                    <span className="token-name-cell">
+                      <span className={`dot dot-${t.type.toLowerCase()}`} />
+                      {t.type.toLowerCase()}
+                    </span>
+                    <span className="token-lexeme-cell">{t.lexeme}</span>
+                    <span className="token-type-cell">{t.type}</span>
+                    <span className="token-line-cell">{t.line}</span>
                   </div>
                 ))}
               </div>
             </>
           )}
 
-          <div className="panel-footer">
-            <span>{getErrorText()}</span>
-            <span>{status === 'error' ? 'Lexer halted' : getStatusText()}</span>
+          <div className="results-statusbar">
+            <span>{errorText}</span>
+            <span>{statusText}</span>
           </div>
         </div>
       </div>
